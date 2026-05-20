@@ -1,0 +1,10 @@
+[tools]
+go = "1.26.0"
+
+[tasks.run]
+run = "go run main.go"
+description = "Run the proxy server"
+
+[tasks.build]
+run = "go build -o ./bin/proxy ."
+description = "Build the proxy binary"
