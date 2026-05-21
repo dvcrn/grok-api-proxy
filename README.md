@@ -1,6 +1,8 @@
 # Grok API Proxy
 
-A simple, local reverse-proxy built in Go that handles OAuth authentication against the xAI Grok API. It transparently adds your authorization credentials to API requests and manages token refreshes for you, letting you query the API without having to manually manage tokens or API keys.
+A simple, local reverse-proxy that handles OAuth authentication against the xAI Grok API. It transparently adds your authorization credentials to API requests and manages token refreshes for you, letting you use your SuperGrok subscription to make requests against the xAI API. 
+
+
 
 ## Features
 
@@ -117,6 +119,21 @@ curl http://127.0.0.1:56121/models
 
 ## Usage in Popular Tools
 
+### OpenCode
+
+Update the provider configuration in your opencode.json:
+
+```json
+  "provider": {
+    "xai": {
+      "options": {
+        "baseURL": "http://localhost:56121",
+        "apiKey": "x"
+      }
+    }
+   }
+```
+
 ### Zed
 
 Add the following to your `~/.config/zed/settings.json` (or the project-local `.zed/settings.json`):
@@ -128,6 +145,16 @@ Check the latest models by running `curl http://localhost:56121/models`
   "x_ai": {
     "api_url": "http://localhost:56121",
     "available_models": [
+        {
+          "name": "grok-build-0.1",
+          "display_name": "Grok Build 0.1",
+          "max_tokens": 256000,
+          "max_output_tokens": 32768,
+          "max_completion_tokens": 32768,
+          "parallel_tool_calls": true,
+          "supports_images": true,
+          "supports_tools": true,
+        },
       {
         "name": "grok-4.3",
         "display_name": "Grok 4.3",
