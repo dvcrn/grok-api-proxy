@@ -117,6 +117,8 @@ curl http://127.0.0.1:56121/chat/completions \
 curl http://127.0.0.1:56121/models
 ```
 
+The proxy merges a small set of extra model entries into the upstream `/models` response (for example `grok-composer`). See `extraModels` in `models.go` to add or change them.
+
 ## Usage in Popular Tools
 
 ### OpenCode

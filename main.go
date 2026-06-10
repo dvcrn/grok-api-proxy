@@ -20,12 +20,12 @@ import (
 )
 
 const (
-	clientID     = "b1a00492-073a-47ea-816f-4c329264a828"
-	redirectURI  = "http://127.0.0.1:56121/callback"
-	scope        = "openid profile email offline_access grok-cli:access api:access"
-	authURL      = "https://auth.x.ai/oauth2/authorize"
-	tokenURL     = "https://auth.x.ai/oauth2/token"
-	apiURL       = "https://api.x.ai/v1"
+	clientID    = "b1a00492-073a-47ea-816f-4c329264a828"
+	redirectURI = "http://127.0.0.1:56121/callback"
+	scope       = "openid profile email offline_access grok-cli:access api:access"
+	authURL     = "https://auth.x.ai/oauth2/authorize"
+	tokenURL    = "https://auth.x.ai/oauth2/token"
+	apiURL      = "https://api.x.ai/v1"
 )
 
 type AuthTokens struct {
@@ -252,35 +252,68 @@ func refreshToken(refreshToken string) (*AuthTokens, error) {
 	return &tokens, nil
 }
 
+type errorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
+}
+
+func writeJSONError(w http.ResponseWriter, status int, response errorResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("write json error response: %v", err)
+	}
+}
+
+var (
+	unauthorizedResponse = errorResponse{
+		Error:   "Unauthorized",
+		Message: "Please visit http://127.0.0.1:56121/login in your browser to authenticate.",
+	}
+	tokenExpiredResponse = errorResponse{
+		Error:   "Token expired",
+		Message: "Failed to refresh token. Please visit http://127.0.0.1:56121/login again.",
+	}
+)
+
+func ensureAccessToken(w http.ResponseWriter) (*AuthTokens, bool) {
+	tokens, err := loadTokens()
+	if err != nil || tokens.AccessToken == "" {
+		writeJSONError(w, http.StatusUnauthorized, unauthorizedResponse)
+		return nil, false
+	}
+
+	if time.Now().Unix() > tokens.ExpiresAt-120 {
+		newTokens, err := refreshToken(tokens.RefreshToken)
+		if err != nil {
+			log.Printf("Failed to refresh token: %v", err)
+			writeJSONError(w, http.StatusUnauthorized, tokenExpiredResponse)
+			return nil, false
+		}
+		tokens = newTokens
+	}
+
+	return tokens, true
+}
+
 func handleProxy(p *httputil.ReverseProxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// If it's a request to /login or /callback, it shouldn't hit the proxy.
 		// We handle those directly in main.
-		
-		tokens, err := loadTokens()
-		if err != nil || tokens.AccessToken == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error": "Unauthorized", "message": "Please visit http://127.0.0.1:56121/login in your browser to authenticate."}`))
+
+		tokens, ok := ensureAccessToken(w)
+		if !ok {
 			return
 		}
 
-		// Check expiry with 2 minutes skew
-		if time.Now().Unix() > tokens.ExpiresAt-120 {
-			newTokens, err := refreshToken(tokens.RefreshToken)
-			if err != nil {
-				log.Printf("Failed to refresh token: %v", err)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"error": "Token expired", "message": "Failed to refresh token. Please visit http://127.0.0.1:56121/login again."}`))
-				return
-			}
-			tokens = newTokens
+		if isModelsListRequest(r) {
+			handleModelsList(w, r, tokens)
+			return
 		}
 
 		// Inject Authorization header
 		r.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
-		
+
 		// Serve the request via proxy
 		p.ServeHTTP(w, r)
 	}
@@ -300,9 +333,9 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rw := &responseWriter{w, http.StatusOK}
-		
+
 		next(rw, r)
-		
+
 		duration := time.Since(start)
 		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rw.statusCode, duration)
 	}
@@ -321,9 +354,15 @@ func main() {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		req.Host = target.Host
-		
+
+		// Normalize paths that start with /v1 so that tools which send
+		// /v1/models or /v1/chat/completions still work correctly.
+		if strings.HasPrefix(req.URL.Path, "/v1/") {
+			req.URL.Path = "/" + strings.TrimPrefix(req.URL.Path, "/v1/")
+		}
+
 		// Ensure the path is properly formatted:
-		// Target path is /v1. If request path is /chat/completions, 
+		// Target path is /v1. If request path is /chat/completions,
 		// we want /v1/chat/completions
 		if !strings.HasPrefix(req.URL.Path, target.Path) {
 			req.URL.Path = strings.TrimSuffix(target.Path, "/") + "/" + strings.TrimPrefix(req.URL.Path, "/")
