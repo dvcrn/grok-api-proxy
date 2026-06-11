@@ -21,7 +21,7 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 ### With mise
 
 ```bash
-mise use go:github.com/dvcrn/grok-oauth-proxy
+mise use -g go:github.com/dvcrn/grok-oauth-proxy@latest
 ```
 
 ### With Go
