@@ -1,5 +1,5 @@
 {
-  "name": "@dvcrn/grok-oauth-proxy",
+  "name": "grok-oauth-proxy",
   "version": "1.0.0",
   "description": "Release package for grok-oauth-proxy",
   "repository": {

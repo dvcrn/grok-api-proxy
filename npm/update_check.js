@@ -4,8 +4,8 @@ const os = require("os");
 const https = require("https");
 const semver = require("semver");
 
-const DEFAULT_PACKAGE_NAME = "@dvcrn/grok-oauth-proxy";
-const DEFAULT_UPDATE_COMMAND = "npm install -g @dvcrn/grok-oauth-proxy";
+const DEFAULT_PACKAGE_NAME = "grok-oauth-proxy";
+const DEFAULT_UPDATE_COMMAND = "npm install -g grok-oauth-proxy";
 const CACHE_DIR_NAME = "grok-oauth-proxy";
 
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;

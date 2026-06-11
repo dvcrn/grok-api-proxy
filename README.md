@@ -21,7 +21,7 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 ### With npm
 
 ```bash
-npm install -g @dvcrn/grok-oauth-proxy
+npm install -g grok-oauth-proxy
 ```
 
 ### With mise
