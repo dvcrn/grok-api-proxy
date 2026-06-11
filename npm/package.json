@@ -1,0 +1,22 @@
+{
+  "name": "@dvcrn/grok-oauth-proxy",
+  "version": "1.0.0",
+  "description": "Release package for grok-oauth-proxy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dvcrn/grok-oauth-proxy.git",
+    "directory": "npm"
+  },
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "grok-oauth-proxy": "index.js"
+  },
+  "dependencies": {
+    "semver": "^7.7.4"
+  }
+}
