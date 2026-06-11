@@ -1,4 +1,4 @@
-# Grok API Proxy
+# Grok OAuth Proxy
 
 A simple, local reverse-proxy that handles OAuth authentication against the xAI Grok API. It transparently adds your authorization credentials to API requests and manages token refreshes for you, letting you use your SuperGrok subscription to make requests against the xAI API. 
 
@@ -9,7 +9,7 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 - **Interactive OAuth Handshake:** Easily log in and get your OAuth tokens right from the terminal and your browser.
 - **Transparent Proxying:** Send requests to `127.0.0.1:56121` just like you would to `api.x.ai/v1`, and the proxy takes care of forwarding them with the correct headers.
 - **Automatic Token Refresh:** Access tokens are automatically refreshed in the background whenever they expire.
-- **Secure Local Storage:** Credentials are saved locally to `~/.config/grok-api-proxy/auth.json`.
+- **Secure Local Storage:** Credentials are saved locally to `~/.config/grok-oauth-proxy/auth.json`.
 
 ## Requirements
 
@@ -21,27 +21,27 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 ### With mise
 
 ```bash
-mise use go:github.com/dvcrn/grok-api-proxy
+mise use go:github.com/dvcrn/grok-oauth-proxy
 ```
 
 ### With Go
 
 ```bash
-go install github.com/dvcrn/grok-api-proxy@latest
+go install github.com/dvcrn/grok-oauth-proxy@latest
 ```
 
 After installation, authenticate with:
 
 ```bash
-grok-api-proxy auth
+grok-oauth-proxy auth
 ```
 
-This writes your credentials to `~/.config/grok-api-proxy/auth.json`.
+This writes your credentials to `~/.config/grok-oauth-proxy/auth.json`.
 
 Then run the proxy:
 
 ```bash
-grok-api-proxy
+grok-oauth-proxy
 ```
 
 ## Setup & Building (from source)
@@ -71,7 +71,7 @@ Before you can use the proxy, you need to perform an initial OAuth login to get 
 Run the `auth` subcommand:
 
 ```bash
-grok-api-proxy auth
+grok-oauth-proxy auth
 ```
 
 This will start a temporary server and automatically open your default browser. Complete the authorization flow in the browser. Once finished, you will see a success message and the tokens will be saved.
@@ -83,7 +83,7 @@ This will start a temporary server and automatically open your default browser. 
 Start the persistent background proxy server:
 
 ```bash
-grok-api-proxy
+grok-oauth-proxy
 ```
 
 (If you built from source: `mise run` or `./bin/proxy`)

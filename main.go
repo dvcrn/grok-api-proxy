@@ -48,7 +48,7 @@ func getAuthFilePath() string {
 	if err != nil {
 		log.Fatalf("Failed to get home dir: %v", err)
 	}
-	return filepath.Join(home, ".config", "grok-api-proxy", "auth.json")
+	return filepath.Join(home, ".config", "grok-oauth-proxy", "auth.json")
 }
 
 func saveTokens(tokens AuthTokens) error {
