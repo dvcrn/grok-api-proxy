@@ -48,7 +48,20 @@ func getAuthFilePath() string {
 	if err != nil {
 		log.Fatalf("Failed to get home dir: %v", err)
 	}
-	return filepath.Join(home, ".config", "grok-oauth-proxy", "auth.json")
+	newPath := filepath.Join(home, ".config", "grok-oauth-proxy", "auth.json")
+
+	// Migrate credentials from the pre-rename path so existing users aren't
+	// logged out after upgrading. Only migrate when the new file is absent.
+	if _, err := os.Stat(newPath); os.IsNotExist(err) {
+		oldPath := filepath.Join(home, ".config", "grok-api-proxy", "auth.json")
+		if _, err := os.Stat(oldPath); err == nil {
+			if err := os.MkdirAll(filepath.Dir(newPath), 0700); err == nil {
+				_ = os.Rename(oldPath, newPath)
+			}
+		}
+	}
+
+	return newPath
 }
 
 func saveTokens(tokens AuthTokens) error {
