@@ -54,12 +54,12 @@ You can use `mise` to easily build and run the project, as tasks are defined in 
 mise build
 ```
 
-_(This will compile the binary to `./bin/proxy`)_
+_(This will compile the binary to `./bin/grok-oauth-proxy`)_
 
 Alternatively, you can build it manually using standard Go tools:
 
 ```bash
-go build -o ./bin/proxy .
+go build -o ./bin/grok-oauth-proxy .
 ```
 
 ## Usage
@@ -76,7 +76,7 @@ grok-oauth-proxy auth
 
 This will start a temporary server and automatically open your default browser. Complete the authorization flow in the browser. Once finished, you will see a success message and the tokens will be saved.
 
-(If you built from source: `./bin/proxy auth`)
+(If you built from source: `./bin/grok-oauth-proxy auth`)
 
 ### 2. Run the Proxy
 
@@ -86,7 +86,7 @@ Start the persistent background proxy server:
 grok-oauth-proxy
 ```
 
-(If you built from source: `mise run` or `./bin/proxy`)
+(If you built from source: `mise run` or `./bin/grok-oauth-proxy`)
 
 The proxy server will now listen on `http://127.0.0.1:56121`.
 

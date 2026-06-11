@@ -6,5 +6,5 @@ run = "go run main.go"
 description = "Run the proxy server"
 
 [tasks.build]
-run = "go build -o ./bin/proxy ."
+run = "go build -o ./bin/grok-oauth-proxy ."
 description = "Build the proxy binary"

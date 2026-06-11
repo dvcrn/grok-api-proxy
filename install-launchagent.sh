@@ -26,12 +26,12 @@ if [ -n "${GO_BIN}" ]; then
     if command -v mise &> /dev/null; then
         mise run build
     else
-        go build -o ./bin/proxy .
+        go build -o ./bin/grok-oauth-proxy .
     fi
 
-    if [ -f "${PROJECT_DIR}/bin/proxy" ] && [ -x "${PROJECT_DIR}/bin/proxy" ]; then
+    if [ -f "${PROJECT_DIR}/bin/grok-oauth-proxy" ] && [ -x "${PROJECT_DIR}/bin/grok-oauth-proxy" ]; then
         echo "Binary built successfully"
-        BINARY_PATH="${PROJECT_DIR}/bin/proxy"
+        BINARY_PATH="${PROJECT_DIR}/bin/grok-oauth-proxy"
         USE_GO_RUN="false"
     else
         echo "Binary build failed or not executable, will use 'go run' instead"
