@@ -4,12 +4,12 @@ set -e
 
 # Get the absolute path of the current directory
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLIST_NAME="com.grok-proxy.plist"
+PLIST_NAME="sh.d.grok-oauth-proxy.plist"
 PLIST_LOCAL="${PROJECT_DIR}/${PLIST_NAME}"
 LAUNCHAGENTS_DIR="${HOME}/Library/LaunchAgents"
 PLIST_SYMLINK="${LAUNCHAGENTS_DIR}/${PLIST_NAME}"
 
-echo "Installing grok-proxy LaunchAgent..."
+echo "Installing grok-oauth-proxy LaunchAgent..."
 echo "Project directory: ${PROJECT_DIR}"
 
 # Create LaunchAgents directory if it doesn't exist
@@ -51,7 +51,7 @@ if [ "${USE_GO_RUN}" = "true" ]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.grok-proxy</string>
+    <string>sh.d.grok-oauth-proxy</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -78,10 +78,10 @@ if [ "${USE_GO_RUN}" = "true" ]; then
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>${HOME}/Library/Logs/grok-proxy.log</string>
+    <string>${HOME}/Library/Logs/grok-oauth-proxy.log</string>
 
     <key>StandardErrorPath</key>
-    <string>${HOME}/Library/Logs/grok-proxy.error.log</string>
+    <string>${HOME}/Library/Logs/grok-oauth-proxy.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -100,7 +100,7 @@ else
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.grok-proxy</string>
+    <string>sh.d.grok-oauth-proxy</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -125,10 +125,10 @@ else
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>${HOME}/Library/Logs/grok-proxy.log</string>
+    <string>${HOME}/Library/Logs/grok-oauth-proxy.log</string>
 
     <key>StandardErrorPath</key>
-    <string>${HOME}/Library/Logs/grok-proxy.error.log</string>
+    <string>${HOME}/Library/Logs/grok-oauth-proxy.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -152,7 +152,7 @@ if [ -L "${PLIST_SYMLINK}" ]; then
     rm "${PLIST_SYMLINK}"
 fi
 
-if launchctl list | grep -q "com.grok-proxy"; then
+if launchctl list | grep -q "sh.d.grok-oauth-proxy"; then
     echo "Unloading existing service..."
     launchctl unload "${PLIST_SYMLINK}" 2>/dev/null || true
 fi
@@ -169,17 +169,17 @@ echo "Loading service..."
 launchctl load "${PLIST_SYMLINK}"
 
 sleep 2
-if launchctl list | grep -q "com.grok-proxy"; then
+if launchctl list | grep -q "sh.d.grok-oauth-proxy"; then
     echo "✅ LaunchAgent installed and started successfully!"
     echo ""
     echo "Service management commands:"
-    echo "  Check status:  launchctl list | grep grok-proxy"
-    echo "  View logs:     tail -f ~/Library/Logs/grok-proxy.log"
-    echo "  View errors:   tail -f ~/Library/Logs/grok-proxy.error.log"
+    echo "  Check status:  launchctl list | grep grok-oauth-proxy"
+    echo "  View logs:     tail -f ~/Library/Logs/grok-oauth-proxy.log"
+    echo "  View errors:   tail -f ~/Library/Logs/grok-oauth-proxy.error.log"
     echo "  Stop service:  launchctl unload ~/Library/LaunchAgents/${PLIST_NAME}"
     echo "  Start service: launchctl load ~/Library/LaunchAgents/${PLIST_NAME}"
     echo "  Uninstall:     ./uninstall-launchagent.sh"
 else
     echo "⚠️  Service may not have started correctly. Check logs at:"
-    echo "  ~/Library/Logs/grok-proxy.error.log"
+    echo "  ~/Library/Logs/grok-oauth-proxy.error.log"
 fi

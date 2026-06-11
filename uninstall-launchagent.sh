@@ -1,13 +1,13 @@
 #!/bin/bash
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLIST_NAME="com.grok-proxy.plist"
+PLIST_NAME="sh.d.grok-oauth-proxy.plist"
 PLIST_LOCAL="${PROJECT_DIR}/${PLIST_NAME}"
 PLIST_SYMLINK="${HOME}/Library/LaunchAgents/${PLIST_NAME}"
 
-echo "Uninstalling grok-proxy LaunchAgent..."
+echo "Uninstalling grok-oauth-proxy LaunchAgent..."
 
-if launchctl list | grep -q "com.grok-proxy"; then
+if launchctl list | grep -q "sh.d.grok-oauth-proxy"; then
     echo "Stopping service..."
     launchctl unload "${PLIST_SYMLINK}" 2>/dev/null || true
     echo "Service stopped"
