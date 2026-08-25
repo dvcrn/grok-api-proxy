@@ -43,6 +43,24 @@ else
     GO_BIN="go"
 fi
 
+# ADMIN_API_KEY gates the /mcp endpoint. launchd does not inherit the invoking
+# shell's environment, so the key has to be baked into the plist to reach the
+# service - exporting it in the shell that runs this script is not enough.
+xml_escape() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+ADMIN_API_KEY_ENTRY=""
+if [ -n "${ADMIN_API_KEY:-}" ]; then
+    ADMIN_API_KEY_ENTRY="
+        <key>ADMIN_API_KEY</key>
+        <string>$(xml_escape "${ADMIN_API_KEY}")</string>"
+    echo "ADMIN_API_KEY found in environment, /mcp will be enabled"
+else
+    echo "ADMIN_API_KEY not set, /mcp will be disabled (the proxied API paths are unaffected)"
+    echo "  To enable it, re-run: ADMIN_API_KEY=your-key ./install-launchagent.sh"
+fi
+
 # Generate the plist file locally in project directory
 if [ "${USE_GO_RUN}" = "true" ]; then
     cat > "${PLIST_LOCAL}" <<EOF
@@ -88,7 +106,7 @@ if [ "${USE_GO_RUN}" = "true" ]; then
         <key>PATH</key>
         <string>/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>HOME</key>
-        <string>${HOME}</string>
+        <string>${HOME}</string>${ADMIN_API_KEY_ENTRY}
     </dict>
 </dict>
 </plist>
@@ -133,7 +151,7 @@ else
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key>
-        <string>${HOME}</string>
+        <string>${HOME}</string>${ADMIN_API_KEY_ENTRY}
     </dict>
 </dict>
 </plist>
@@ -146,6 +164,9 @@ if [ ! -f "${PLIST_LOCAL}" ]; then
     echo "❌ Error: Failed to create plist file"
     exit 1
 fi
+
+# The plist may embed ADMIN_API_KEY, so keep it readable only by the user.
+chmod 600 "${PLIST_LOCAL}"
 
 if [ -L "${PLIST_SYMLINK}" ]; then
     echo "Removing old symlink..."

@@ -141,6 +141,13 @@ without it `/mcp` returns 500 while the rest of the proxy keeps working as befor
 ADMIN_API_KEY=xxxx grok-oauth-proxy
 ```
 
+If you run the proxy as a LaunchAgent, `launchd` does not inherit your shell's
+environment, so set the key when installing and it gets baked into the plist:
+
+```bash
+ADMIN_API_KEY=xxxx ./install-launchagent.sh
+```
+
 ```json
 {
   "mcpServers": {
