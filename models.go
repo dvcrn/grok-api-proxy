@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,7 +86,11 @@ func mergeModelsList(upstreamBody []byte, extras []model) ([]byte, error) {
 }
 
 func fetchUpstreamModels(r *http.Request, accessToken string) (int, []byte, error) {
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, apiURL+"/models", nil)
+	return fetchModels(r.Context(), accessToken)
+}
+
+func fetchModels(ctx context.Context, accessToken string) (int, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"/models", nil)
 	if err != nil {
 		return 0, nil, fmt.Errorf("create upstream models request: %w", err)
 	}

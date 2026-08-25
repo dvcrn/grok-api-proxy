@@ -10,6 +10,7 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 - **Transparent Proxying:** Send requests to `127.0.0.1:56121` just like you would to `api.x.ai/v1`, and the proxy takes care of forwarding them with the correct headers.
 - **Automatic Token Refresh:** Access tokens are automatically refreshed in the background whenever they expire.
 - **Secure Local Storage:** Credentials are saved locally to `~/.config/grok-oauth-proxy/auth.json`.
+- **MCP Server:** An `/mcp` endpoint exposes the models as MCP tools (`ask_grok`, `ask_grok_models`), gated by `ADMIN_API_KEY`.
 
 ## Requirements
 
@@ -124,6 +125,42 @@ curl http://127.0.0.1:56121/models
 ```
 
 The proxy merges a small set of extra model entries into the upstream `/models` response (for example `grok-composer`). See `extraModels` in `models.go` to add or change them.
+
+### 4. MCP clients
+
+The proxy also speaks MCP over streamable HTTP at `/mcp`, so any MCP client can ask
+Grok models a question without going through the chat completions endpoint. The
+session is stateless.
+
+Unlike the proxied API paths, `/mcp` is gated by a bearer token, so that exposing the
+proxy through a tunnel does not hand anyone who finds it your Grok subscription. Set
+`ADMIN_API_KEY` before starting the proxy and send the same value as a bearer token;
+without it `/mcp` returns 500 while the rest of the proxy keeps working as before.
+
+```bash
+ADMIN_API_KEY=xxxx grok-oauth-proxy
+```
+
+```json
+{
+  "mcpServers": {
+    "ask-grok": {
+      "type": "http",
+      "url": "http://127.0.0.1:56121/mcp",
+      "headers": {
+        "Authorization": "Bearer xxxx"
+      }
+    }
+  }
+}
+```
+
+Two tools are exposed:
+
+- `ask_grok(model, prompt)` - ask a model a single self-contained question and get
+  the answer back as text. There is no conversation history, so the prompt needs to
+  carry all the context.
+- `ask_grok_models()` - list the model IDs the current Grok account can use.
 
 ## Usage in Popular Tools
 
