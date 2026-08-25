@@ -98,14 +98,35 @@ grok-oauth-proxy
 
 The proxy server will now listen on `http://127.0.0.1:56121`.
 
-### 3. Send Requests
+### 3. Set an API key
 
-You can now use `http://127.0.0.1:56121` as a drop-in replacement for the `https://api.x.ai/v1` base URL. You don't need to pass any Authorization headers; the proxy handles that for you.
+Requests to the proxy require `ADMIN_API_KEY`, so exposing it through a tunnel does
+not hand anyone who finds it your Grok subscription. Set it when starting the proxy:
+
+```bash
+ADMIN_API_KEY=xxxx grok-oauth-proxy
+```
+
+Send the same value as `Authorization: Bearer <key>`, an `X-API-Key` header, or a
+`key` query parameter. Requests without it are rejected; if the proxy is started
+without the variable set, it refuses to serve rather than running unauthenticated.
+
+`launchd` does not inherit your shell environment, so for a LaunchAgent set the key
+when installing and it gets baked into the plist:
+
+```bash
+ADMIN_API_KEY=xxxx ./install-launchagent.sh
+```
+
+### 4. Send Requests
+
+You can now use `http://127.0.0.1:56121` as a drop-in replacement for the `https://api.x.ai/v1` base URL. Pass your `ADMIN_API_KEY` as the bearer token (see [Set an API key](#3-set-an-api-key)); the proxy swaps in your real Grok credentials.
 
 **Example Chat Completion:**
 
 ```bash
 curl http://127.0.0.1:56121/chat/completions \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -122,36 +143,18 @@ curl http://127.0.0.1:56121/chat/completions \
 **Example Listing Models:**
 
 ```bash
-curl http://127.0.0.1:56121/models
+curl http://127.0.0.1:56121/models -H "Authorization: Bearer $ADMIN_API_KEY"
 ```
 
 The proxy merges a small set of extra model entries into the upstream `/models` response (for example `grok-composer`). See `extraModels` in `models.go` to add or change them.
 
-### 4. MCP clients
+### 5. MCP clients
 
 The proxy also speaks MCP over streamable HTTP at `/mcp`, so any MCP client can ask
 Grok models a question without going through the chat completions endpoint. The
 session is stateless.
 
-The proxied API paths and `/mcp` are both gated by a bearer token, so that exposing
-the proxy through a tunnel does not hand anyone who finds it your Grok subscription.
-Set `ADMIN_API_KEY` before starting the proxy and send the same value as a bearer
-token; without it those paths return 500. Only `/login` and `/callback` stay open, so
-the OAuth flow remains reachable from a browser.
-
-The key can be supplied as `Authorization: Bearer <key>`, an `X-API-Key` header, or a
-`key` query parameter.
-
-```bash
-ADMIN_API_KEY=xxxx grok-oauth-proxy
-```
-
-If you run the proxy as a LaunchAgent, `launchd` does not inherit your shell's
-environment, so set the key when installing and it gets baked into the plist:
-
-```bash
-ADMIN_API_KEY=xxxx ./install-launchagent.sh
-```
+Point your client at `/mcp` and send your `ADMIN_API_KEY` as the bearer token:
 
 ```json
 {
