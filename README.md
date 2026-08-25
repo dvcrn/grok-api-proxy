@@ -142,11 +142,6 @@ the OAuth flow remains reachable from a browser.
 The key can be supplied as `Authorization: Bearer <key>`, an `X-API-Key` header, or a
 `key` query parameter.
 
-> **Upgrading:** this replaces the earlier `ADMIN_KEY` variable, which only gated the
-> proxied paths and disabled authentication entirely when unset. Rename it to
-> `ADMIN_API_KEY` in your service definition; an unset key is now treated as a
-> misconfiguration rather than silently serving the proxy unauthenticated.
-
 ```bash
 ADMIN_API_KEY=xxxx grok-oauth-proxy
 ```

@@ -43,13 +43,9 @@ else
     GO_BIN="go"
 fi
 
-# ADMIN_API_KEY gates the proxied API paths and /mcp. launchd does not inherit
-# the invoking shell's environment, so the key has to be baked into the plist to
-# reach the service - exporting it in the shell that runs this script is not
-# enough.
-#
-# This replaces the older ADMIN_KEY variable. If you previously installed the
-# LaunchAgent with ADMIN_KEY, re-run this script with ADMIN_API_KEY set.
+# launchd does not inherit the invoking shell's environment, so ADMIN_API_KEY
+# has to be baked into the plist to reach the service - exporting it in the
+# shell that runs this script is not enough.
 xml_escape() {
     printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }

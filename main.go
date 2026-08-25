@@ -403,9 +403,8 @@ func main() {
 	mux.HandleFunc("/mcp", mcp)
 	mux.HandleFunc("/mcp/", mcp)
 
-	// The proxied API paths are gated by the same admin key as /mcp, matching
-	// the other OAuth proxies. /login and /callback stay open because the OAuth
-	// flow has to be reachable from the browser.
+	// /login and /callback are deliberately left ungated above: the OAuth flow
+	// has to be reachable from the browser before a key can be used.
 	mux.HandleFunc("/", loggingMiddleware(adminMiddleware(handleProxy(proxy))))
 
 	server := &http.Server{

@@ -14,9 +14,8 @@ func okHandler(called *bool) http.HandlerFunc {
 	}
 }
 
-// Unlike the ADMIN_KEY middleware this replaced, an unset key fails closed
-// rather than disabling authentication: a missing key is a misconfiguration,
-// not an invitation to serve the proxy unauthenticated.
+// An unset key fails closed: a missing key is a misconfiguration, not an
+// invitation to serve the proxy unauthenticated.
 func TestAdminMiddleware_FailsClosedWhenUnset(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", "")
 
