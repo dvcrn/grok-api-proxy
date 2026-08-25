@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -276,21 +277,44 @@ var (
 	}
 )
 
-func ensureAccessToken(w http.ResponseWriter) (*AuthTokens, bool) {
+var (
+	errNotAuthenticated   = errors.New("no stored credentials")
+	errTokenRefreshFailed = errors.New("failed to refresh token")
+)
+
+// currentAccessToken loads the stored tokens and refreshes them when they are
+// about to expire. HTTP handlers should use ensureAccessToken, which turns the
+// errors into the JSON responses clients expect.
+func currentAccessToken() (*AuthTokens, error) {
 	tokens, err := loadTokens()
-	if err != nil || tokens.AccessToken == "" {
-		writeJSONError(w, http.StatusUnauthorized, unauthorizedResponse)
-		return nil, false
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", errNotAuthenticated, err)
+	}
+	if tokens.AccessToken == "" {
+		return nil, errNotAuthenticated
 	}
 
 	if time.Now().Unix() > tokens.ExpiresAt-120 {
 		newTokens, err := refreshToken(tokens.RefreshToken)
 		if err != nil {
-			log.Printf("Failed to refresh token: %v", err)
-			writeJSONError(w, http.StatusUnauthorized, tokenExpiredResponse)
-			return nil, false
+			return nil, fmt.Errorf("%w: %v", errTokenRefreshFailed, err)
 		}
 		tokens = newTokens
+	}
+
+	return tokens, nil
+}
+
+func ensureAccessToken(w http.ResponseWriter) (*AuthTokens, bool) {
+	tokens, err := currentAccessToken()
+	if errors.Is(err, errTokenRefreshFailed) {
+		log.Printf("Failed to refresh token: %v", err)
+		writeJSONError(w, http.StatusUnauthorized, tokenExpiredResponse)
+		return nil, false
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusUnauthorized, unauthorizedResponse)
+		return nil, false
 	}
 
 	return tokens, true
@@ -372,7 +396,16 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", loggingMiddleware(handleLogin))
 	mux.HandleFunc("/callback", loggingMiddleware(handleCallback))
-	mux.HandleFunc("/", loggingMiddleware(handleProxy(proxy)))
+
+	// MCP endpoint. The handler is built once so the tool set is shared across
+	// requests; the session itself is stateless.
+	mcp := loggingMiddleware(adminMiddleware(mcpHandler()))
+	mux.HandleFunc("/mcp", mcp)
+	mux.HandleFunc("/mcp/", mcp)
+
+	// /login and /callback are deliberately left ungated above: the OAuth flow
+	// has to be reachable from the browser before a key can be used.
+	mux.HandleFunc("/", loggingMiddleware(adminMiddleware(handleProxy(proxy))))
 
 	server := &http.Server{
 		Addr:    "127.0.0.1:56121",

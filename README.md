@@ -10,6 +10,8 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 - **Transparent Proxying:** Send requests to `127.0.0.1:56121` just like you would to `api.x.ai/v1`, and the proxy takes care of forwarding them with the correct headers.
 - **Automatic Token Refresh:** Access tokens are automatically refreshed in the background whenever they expire.
 - **Secure Local Storage:** Credentials are saved locally to `~/.config/grok-oauth-proxy/auth.json`.
+- **MCP Server:** An `/mcp` endpoint exposes the models as MCP tools (`ask_grok`, `ask_grok_models`).
+- **Authentication:** The proxied API paths and `/mcp` are gated by `ADMIN_API_KEY`.
 
 ## Requirements
 
@@ -96,14 +98,35 @@ grok-oauth-proxy
 
 The proxy server will now listen on `http://127.0.0.1:56121`.
 
-### 3. Send Requests
+### 3. Set an API key
 
-You can now use `http://127.0.0.1:56121` as a drop-in replacement for the `https://api.x.ai/v1` base URL. You don't need to pass any Authorization headers; the proxy handles that for you.
+Requests to the proxy require `ADMIN_API_KEY`, so exposing it through a tunnel does
+not hand anyone who finds it your Grok subscription. Set it when starting the proxy:
+
+```bash
+ADMIN_API_KEY=xxxx grok-oauth-proxy
+```
+
+Send the same value as `Authorization: Bearer <key>`, an `X-API-Key` header, or a
+`key` query parameter. Requests without it are rejected; if the proxy is started
+without the variable set, it refuses to serve rather than running unauthenticated.
+
+`launchd` does not inherit your shell environment, so for a LaunchAgent set the key
+when installing and it gets baked into the plist:
+
+```bash
+ADMIN_API_KEY=xxxx ./install-launchagent.sh
+```
+
+### 4. Send Requests
+
+You can now use `http://127.0.0.1:56121` as a drop-in replacement for the `https://api.x.ai/v1` base URL. Pass your `ADMIN_API_KEY` as the bearer token (see [Set an API key](#3-set-an-api-key)); the proxy swaps in your real Grok credentials.
 
 **Example Chat Completion:**
 
 ```bash
 curl http://127.0.0.1:56121/chat/completions \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -120,10 +143,39 @@ curl http://127.0.0.1:56121/chat/completions \
 **Example Listing Models:**
 
 ```bash
-curl http://127.0.0.1:56121/models
+curl http://127.0.0.1:56121/models -H "Authorization: Bearer $ADMIN_API_KEY"
 ```
 
 The proxy merges a small set of extra model entries into the upstream `/models` response (for example `grok-composer`). See `extraModels` in `models.go` to add or change them.
+
+### 5. MCP clients
+
+The proxy also speaks MCP over streamable HTTP at `/mcp`, so any MCP client can ask
+Grok models a question without going through the chat completions endpoint. The
+session is stateless.
+
+Point your client at `/mcp` and send your `ADMIN_API_KEY` as the bearer token:
+
+```json
+{
+  "mcpServers": {
+    "ask-grok": {
+      "type": "http",
+      "url": "http://127.0.0.1:56121/mcp",
+      "headers": {
+        "Authorization": "Bearer xxxx"
+      }
+    }
+  }
+}
+```
+
+Two tools are exposed:
+
+- `ask_grok(model, prompt)` - ask a model a single self-contained question and get
+  the answer back as text. There is no conversation history, so the prompt needs to
+  carry all the context.
+- `ask_grok_models()` - list the model IDs the current Grok account can use.
 
 ## Usage in Popular Tools
 
