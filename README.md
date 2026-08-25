@@ -10,7 +10,8 @@ A simple, local reverse-proxy that handles OAuth authentication against the xAI 
 - **Transparent Proxying:** Send requests to `127.0.0.1:56121` just like you would to `api.x.ai/v1`, and the proxy takes care of forwarding them with the correct headers.
 - **Automatic Token Refresh:** Access tokens are automatically refreshed in the background whenever they expire.
 - **Secure Local Storage:** Credentials are saved locally to `~/.config/grok-oauth-proxy/auth.json`.
-- **MCP Server:** An `/mcp` endpoint exposes the models as MCP tools (`ask_grok`, `ask_grok_models`), gated by `ADMIN_API_KEY`.
+- **MCP Server:** An `/mcp` endpoint exposes the models as MCP tools (`ask_grok`, `ask_grok_models`).
+- **Authentication:** The proxied API paths and `/mcp` are gated by `ADMIN_API_KEY`.
 
 ## Requirements
 
@@ -132,10 +133,19 @@ The proxy also speaks MCP over streamable HTTP at `/mcp`, so any MCP client can 
 Grok models a question without going through the chat completions endpoint. The
 session is stateless.
 
-Unlike the proxied API paths, `/mcp` is gated by a bearer token, so that exposing the
-proxy through a tunnel does not hand anyone who finds it your Grok subscription. Set
-`ADMIN_API_KEY` before starting the proxy and send the same value as a bearer token;
-without it `/mcp` returns 500 while the rest of the proxy keeps working as before.
+The proxied API paths and `/mcp` are both gated by a bearer token, so that exposing
+the proxy through a tunnel does not hand anyone who finds it your Grok subscription.
+Set `ADMIN_API_KEY` before starting the proxy and send the same value as a bearer
+token; without it those paths return 500. Only `/login` and `/callback` stay open, so
+the OAuth flow remains reachable from a browser.
+
+The key can be supplied as `Authorization: Bearer <key>`, an `X-API-Key` header, or a
+`key` query parameter.
+
+> **Upgrading:** this replaces the earlier `ADMIN_KEY` variable, which only gated the
+> proxied paths and disabled authentication entirely when unset. Rename it to
+> `ADMIN_API_KEY` in your service definition; an unset key is now treated as a
+> misconfiguration rather than silently serving the proxy unauthenticated.
 
 ```bash
 ADMIN_API_KEY=xxxx grok-oauth-proxy

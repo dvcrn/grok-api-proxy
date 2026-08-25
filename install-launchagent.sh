@@ -43,9 +43,13 @@ else
     GO_BIN="go"
 fi
 
-# ADMIN_API_KEY gates the /mcp endpoint. launchd does not inherit the invoking
-# shell's environment, so the key has to be baked into the plist to reach the
-# service - exporting it in the shell that runs this script is not enough.
+# ADMIN_API_KEY gates the proxied API paths and /mcp. launchd does not inherit
+# the invoking shell's environment, so the key has to be baked into the plist to
+# reach the service - exporting it in the shell that runs this script is not
+# enough.
+#
+# This replaces the older ADMIN_KEY variable. If you previously installed the
+# LaunchAgent with ADMIN_KEY, re-run this script with ADMIN_API_KEY set.
 xml_escape() {
     printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
 }
@@ -55,10 +59,11 @@ if [ -n "${ADMIN_API_KEY:-}" ]; then
     ADMIN_API_KEY_ENTRY="
         <key>ADMIN_API_KEY</key>
         <string>$(xml_escape "${ADMIN_API_KEY}")</string>"
-    echo "ADMIN_API_KEY found in environment, /mcp will be enabled"
+    echo "ADMIN_API_KEY found in environment, requests will require it"
 else
-    echo "ADMIN_API_KEY not set, /mcp will be disabled (the proxied API paths are unaffected)"
-    echo "  To enable it, re-run: ADMIN_API_KEY=your-key ./install-launchagent.sh"
+    echo "WARNING: ADMIN_API_KEY not set. The proxied API paths and /mcp will"
+    echo "  return 500 until it is; only /login and /callback stay reachable."
+    echo "  Re-run with: ADMIN_API_KEY=your-key ./install-launchagent.sh"
 fi
 
 # Generate the plist file locally in project directory
