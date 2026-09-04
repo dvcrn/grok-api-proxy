@@ -1,160 +1,99 @@
 # Grok OAuth Proxy
 
-A simple, local reverse-proxy that handles OAuth authentication against the xAI Grok API. It transparently adds your authorization credentials to API requests and manages token refreshes for you, letting you use your SuperGrok subscription to make requests against the xAI API. 
+Grok OAuth Proxy lets OpenAI-compatible clients use the xAI API through a SuperGrok subscription. It runs on your machine, handles the browser login and token refresh, and forwards requests to `api.x.ai` with the current OAuth token.
 
+Use it when a client can connect to an OpenAI-compatible base URL but cannot authenticate with Grok OAuth directly.
 
+## Quick start
 
-## Features
-
-- **Interactive OAuth Handshake:** Easily log in and get your OAuth tokens right from the terminal and your browser.
-- **Transparent Proxying:** Send requests to `127.0.0.1:56121` just like you would to `api.x.ai/v1`, and the proxy takes care of forwarding them with the correct headers.
-- **Automatic Token Refresh:** Access tokens are automatically refreshed in the background whenever they expire.
-- **Secure Local Storage:** Credentials are saved locally to `~/.config/grok-oauth-proxy/auth.json`.
-- **MCP Server:** An `/mcp` endpoint exposes the models as MCP tools (`ask_grok`, `ask_grok_models`).
-- **Authentication:** The proxied API paths and `/mcp` are gated by `ADMIN_API_KEY`.
-
-## Requirements
-
-- Go 1.25.5+
-- [mise](https://mise.jdx.dev/) for task running (optional, but recommended)
-
-## Installation
-
-### With npm
+Install the proxy with npm:
 
 ```bash
 npm install -g grok-oauth-proxy
 ```
 
-### With mise
+Other installation options:
 
 ```bash
+# mise
 mise use -g go:github.com/dvcrn/grok-oauth-proxy@latest
-```
 
-### With Go
-
-```bash
+# Go
 go install github.com/dvcrn/grok-oauth-proxy@latest
 ```
 
-After installation, authenticate with:
+Complete the browser login once:
 
 ```bash
 grok-oauth-proxy auth
 ```
 
-This writes your credentials to `~/.config/grok-oauth-proxy/auth.json`.
+If the browser does not open, visit `http://127.0.0.1:56121/login`. The proxy saves credentials to `~/.config/grok-oauth-proxy/auth.json`.
 
-Then run the proxy:
+Start the server with a key of your choice:
 
 ```bash
-grok-oauth-proxy
+ADMIN_API_KEY="replace-with-a-long-random-value" grok-oauth-proxy
 ```
 
-## Setup & Building (from source)
-
-You can use `mise` to easily build and run the project, as tasks are defined in the included `mise.toml`.
-
-### Building the binary
+The proxy listens on `http://127.0.0.1:56121`. Send requests to its `/v1` base URL and use the admin key as the API key:
 
 ```bash
-mise build
-```
-
-_(This will compile the binary to `./bin/grok-oauth-proxy`)_
-
-Alternatively, you can build it manually using standard Go tools:
-
-```bash
-go build -o ./bin/grok-oauth-proxy .
-```
-
-## Usage
-
-### 1. Authenticate
-
-Before you can use the proxy, you need to perform an initial OAuth login to get your tokens.
-
-Run the `auth` subcommand:
-
-```bash
-grok-oauth-proxy auth
-```
-
-This will start a temporary server and automatically open your default browser. Complete the authorization flow in the browser. Once finished, you will see a success message and the tokens will be saved.
-
-(If you built from source: `./bin/grok-oauth-proxy auth`)
-
-### 2. Run the Proxy
-
-Start the persistent background proxy server:
-
-```bash
-grok-oauth-proxy
-```
-
-(If you built from source: `mise run` or `./bin/grok-oauth-proxy`)
-
-The proxy server will now listen on `http://127.0.0.1:56121`.
-
-### 3. Set an API key
-
-Requests to the proxy require `ADMIN_API_KEY`, so exposing it through a tunnel does
-not hand anyone who finds it your Grok subscription. Set it when starting the proxy:
-
-```bash
-ADMIN_API_KEY=xxxx grok-oauth-proxy
-```
-
-Send the same value as `Authorization: Bearer <key>`, an `X-API-Key` header, or a
-`key` query parameter. Requests without it are rejected; if the proxy is started
-without the variable set, it refuses to serve rather than running unauthenticated.
-
-`launchd` does not inherit your shell environment, so for a LaunchAgent set the key
-when installing and it gets baked into the plist:
-
-```bash
-ADMIN_API_KEY=xxxx ./install-launchagent.sh
-```
-
-### 4. Send Requests
-
-You can now use `http://127.0.0.1:56121` as a drop-in replacement for the `https://api.x.ai/v1` base URL. Pass your `ADMIN_API_KEY` as the bearer token (see [Set an API key](#3-set-an-api-key)); the proxy swaps in your real Grok credentials.
-
-**Example Chat Completion:**
-
-```bash
-curl http://127.0.0.1:56121/chat/completions \
-  -H "Authorization: Bearer $ADMIN_API_KEY" \
+curl http://127.0.0.1:56121/v1/chat/completions \
+  -H "Authorization: Bearer replace-with-your-admin-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello!"
-      }
-    ],
-    "model": "grok-4.20-0309-reasoning",
+    "model": "grok-composer-2.5-fast",
+    "messages": [{"role": "user", "content": "Say hello in one sentence."}],
     "stream": false
   }'
 ```
 
-**Example Listing Models:**
+List the model IDs available to the signed-in account:
 
 ```bash
-curl http://127.0.0.1:56121/models -H "Authorization: Bearer $ADMIN_API_KEY"
+curl http://127.0.0.1:56121/v1/models \
+  -H "Authorization: Bearer replace-with-your-admin-key"
 ```
 
-The proxy merges a small set of extra model entries into the upstream `/models` response (for example `grok-composer`). See `extraModels` in `models.go` to add or change them.
+## Client setup
 
-### 5. MCP clients
+Point OpenAI-compatible clients at `http://127.0.0.1:56121/v1`. For example, an OpenCode provider can use:
 
-The proxy also speaks MCP over streamable HTTP at `/mcp`, so any MCP client can ask
-Grok models a question without going through the chat completions endpoint. The
-session is stateless.
+```json
+{
+  "provider": {
+    "xai": {
+      "options": {
+        "baseURL": "http://127.0.0.1:56121/v1",
+        "apiKey": "replace-with-your-admin-key"
+      }
+    }
+  }
+}
+```
 
-Point your client at `/mcp` and send your `ADMIN_API_KEY` as the bearer token:
+## Authentication
+
+`grok-oauth-proxy auth` uses OAuth 2.0 with PKCE. The local callback stores the access token, refresh token, and expiry time in `~/.config/grok-oauth-proxy/auth.json`. While serving requests, the proxy refreshes the access token shortly before it expires.
+
+`ADMIN_API_KEY` is separate from the Grok OAuth token. It controls access to the local proxy and MCP endpoint. Clients may send it as a bearer token, an `X-API-Key` header, or the `key` query parameter.
+
+The server binds to loopback only. Requests to `/login` and `/callback` remain available without the admin key so the browser flow can complete.
+
+## Endpoints
+
+The proxy forwards xAI API paths, including:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /v1/chat/completions` | OpenAI-compatible chat completions |
+| `GET /v1/models` | Upstream models plus proxy-provided model entries |
+| `POST /mcp` | Stateless MCP server with `ask_grok` and `ask_grok_models` |
+| `GET /login` | Start the browser login |
+| `GET /callback` | Complete the OAuth callback |
+
+## MCP clients
 
 ```json
 {
@@ -163,85 +102,18 @@ Point your client at `/mcp` and send your `ADMIN_API_KEY` as the bearer token:
       "type": "http",
       "url": "http://127.0.0.1:56121/mcp",
       "headers": {
-        "Authorization": "Bearer xxxx"
+        "Authorization": "Bearer replace-with-your-admin-key"
       }
     }
   }
 }
 ```
 
-Two tools are exposed:
+The server exposes `ask_grok(model, prompt)` for one-shot prompts and `ask_grok_models()` for model discovery.
 
-- `ask_grok(model, prompt)` - ask a model a single self-contained question and get
-  the answer back as text. There is no conversation history, so the prompt needs to
-  carry all the context.
-- `ask_grok_models()` - list the model IDs the current Grok account can use.
+## Development
 
-## Usage in Popular Tools
-
-### OpenCode
-
-Update the provider configuration in your opencode.json:
-
-```json
-  "provider": {
-    "xai": {
-      "options": {
-        "baseURL": "http://localhost:56121",
-        "apiKey": "x"
-      }
-    }
-   }
+```bash
+mise run test
+mise run build
 ```
-
-### Zed
-
-Add the following to your `~/.config/zed/settings.json` (or the project-local `.zed/settings.json`):
-
-Check the latest models by running `curl http://localhost:56121/models`
-
-```json
-"language_models": {
-  "x_ai": {
-    "api_url": "http://localhost:56121",
-    "available_models": [
-        {
-          "name": "grok-build-0.1",
-          "display_name": "Grok Build 0.1",
-          "max_tokens": 256000,
-          "max_output_tokens": 32768,
-          "max_completion_tokens": 32768,
-          "parallel_tool_calls": true,
-          "supports_images": true,
-          "supports_tools": true,
-        },
-      {
-        "name": "grok-4.3",
-        "display_name": "Grok 4.3",
-        "max_tokens": 131072,
-        "max_output_tokens": 8192,
-        "parallel_tool_calls": true,
-        "supports_images": true,
-        "supports_tools": true
-      },
-      {
-        "name": "grok-4.20-0309-reasoning",
-        "display_name": "Grok 4.20 Reasoning (0309)",
-        "max_tokens": 131072,
-        "max_output_tokens": 8192,
-        "parallel_tool_calls": true,
-        "supports_images": true,
-        "supports_tools": true
-      }
-    ]
-  }
-}
-```
-
-## How It Works
-
-1. The `auth` subcommand implements an OAuth 2.0 PKCE flow, saving the resulting `access_token` and `refresh_token`.
-2. When the main proxy is running, any incoming request is checked against the saved tokens.
-3. If the `access_token` is valid, it is injected into the headers as `Authorization: Bearer <token>`.
-4. If it's expired (or close to expiring), the proxy uses the `refresh_token` to seamlessly fetch a new access token before forwarding the request.
-5. Unauthenticated requests are immediately rejected with a `401 Unauthorized`.
