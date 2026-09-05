@@ -2,6 +2,8 @@
 
 Grok OAuth Proxy lets OpenAI-compatible clients use the xAI API through a SuperGrok subscription. It runs on your machine, handles the browser login and token refresh, and forwards requests to `api.x.ai` with the current OAuth token.
 
+It also provides an MCP server at `/mcp`. Agents can use it to discover the Grok model IDs exposed by the proxy and send one-shot prompts without configuring an OpenAI API client.
+
 Use it when a client can connect to an OpenAI-compatible base URL but cannot authenticate with Grok OAuth directly.
 
 ## Quick start
@@ -95,6 +97,19 @@ The proxy forwards xAI API paths, including:
 
 ## MCP clients
 
+The `/mcp` endpoint uses stateless streamable HTTP with JSON responses. It keeps no conversation or session state between calls.
+
+MCP requests use the proxy's Grok OAuth credentials upstream and the same `ADMIN_API_KEY` as the proxied API. No separate xAI API key is required.
+
+MCP configuration varies by client. Configure a streamable HTTP server with:
+
+| Setting | Value |
+| --- | --- |
+| URL | `http://127.0.0.1:56121/mcp` |
+| Header | `Authorization: Bearer replace-with-your-admin-key` |
+
+For clients that use an `mcpServers` JSON object:
+
 ```json
 {
   "mcpServers": {
@@ -109,7 +124,16 @@ The proxy forwards xAI API paths, including:
 }
 ```
 
-The server exposes `ask_grok(model, prompt)` for one-shot prompts and `ask_grok_models()` for model discovery.
+The client discovers these tools after it connects:
+
+| Tool | Input | Result |
+| --- | --- | --- |
+| `ask_grok_models` | None | Upstream model IDs plus proxy-provided entries, with owner when present |
+| `ask_grok` | `model`, `prompt` | The requested model, model that served the request, and response text |
+
+Call `ask_grok_models` first when the model ID is not already known. Its results combine the xAI model list with the extra model entries supplied by the proxy.
+
+`ask_grok` is one-shot. It does not retain conversation history, so `prompt` must include all context needed for that call. The returned `model` may differ from `requested_model` when xAI resolves an alias.
 
 ## Development
 
