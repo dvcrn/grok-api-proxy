@@ -1,4 +1,5 @@
 bin
+/build/
 /grok-oauth-proxy
 /dist/
 npm/grok-oauth-proxy

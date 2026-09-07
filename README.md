@@ -81,7 +81,40 @@ Point OpenAI-compatible clients at `http://127.0.0.1:56121/v1`. For example, an 
 
 `ADMIN_API_KEY` is separate from the Grok OAuth token. It controls access to the local proxy and MCP endpoint. Clients may send it as a bearer token, an `X-API-Key` header, or the `key` query parameter.
 
-The server binds to loopback only. Requests to `/login` and `/callback` remain available without the admin key so the browser flow can complete.
+The local server binds to loopback only. Requests to `/login` and `/callback` remain available without the admin key so the browser flow can complete.
+
+## Cloudflare Workers
+
+Workers deployments store OAuth credentials in KV and send xAI traffic through a [Workers VPC](https://developers.cloudflare.com/workers-vpc/) tunnel. Create a tunnel in **Cloudflare Dashboard > Workers VPC > Tunnels**, run `cloudflared` on a machine with normal Internet access, and set its UUID on the `GROK_EGRESS` binding in `wrangler.toml`.
+
+```bash
+wrangler kv namespace create GROK_OAUTH_PROXY_KV
+wrangler deploy
+wrangler secret put ADMIN_API_KEY
+```
+
+Set the returned namespace ID on the `GROK_AUTH` binding. See Cloudflare's [tunnel setup](https://developers.cloudflare.com/workers-vpc/configuration/tunnel/) and [VPC Networks guide](https://developers.cloudflare.com/workers-vpc/configuration/vpc-networks/).
+
+Start xAI device authorization with the protected admin API:
+
+```bash
+BASE_URL="https://grok-oauth-proxy.<SUBDOMAIN>.workers.dev"
+
+curl -X POST "$BASE_URL/admin/auth/start" \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+```
+
+Open the returned `verificationUrl`, enter `userCode` if prompted, then poll no faster than `retryAfterSeconds`:
+
+```bash
+curl -X POST "$BASE_URL/admin/auth/status" \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+
+curl "$BASE_URL/admin/status" \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+```
+
+`POST /admin/tokens` supports manual setup with `accessToken`, `refreshToken`, and `expiresAt` in Unix milliseconds. Access tokens are refreshed five minutes before expiry and saved back to KV. All admin routes accept either the bearer header or `X-API-Key`.
 
 ## Endpoints
 
@@ -93,7 +126,13 @@ The proxy forwards xAI API paths, including:
 | `GET /v1/models` | Upstream models plus proxy-provided model entries |
 | `POST /mcp` | Stateless MCP server with `ask_grok` and `ask_grok_models` |
 | `GET /login` | Start the browser login |
-| `GET /callback` | Complete the OAuth callback |
+| `GET /callback` | Complete the local OAuth callback |
+| `POST /admin/auth/start` | Start Workers xAI device authorization |
+| `GET /admin/auth/status` | Read the Workers authorization state |
+| `POST /admin/auth/status` | Poll xAI and store approved tokens |
+| `POST /admin/tokens` | Store OAuth tokens manually in Workers KV |
+| `GET /admin/status` | Check whether Workers credentials are configured |
+| `GET /health` | Workers health check |
 
 ## MCP clients
 

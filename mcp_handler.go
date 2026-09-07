@@ -149,7 +149,7 @@ func mcpAskGrok(ctx context.Context, in askGrokInput) (askGrokOutput, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	apiCallStart := time.Now()
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := runtimeClient.Do(req)
 	if err != nil {
 		log.Printf("MCP ask_grok upstream request failed after %s: %v", time.Since(apiCallStart), err)
 		return askGrokOutput{}, fmt.Errorf("ask_grok failed for model %q: %w", requestedModel, err)

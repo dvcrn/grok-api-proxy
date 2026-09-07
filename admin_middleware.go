@@ -1,20 +1,20 @@
 package main
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 )
 
-// adminMiddleware checks for a valid admin API key from either
-// 'Authorization: Bearer <key>' or 'X-API-Key: <key>' headers, or the 'key'
-// query parameter. The key comes from ADMIN_API_KEY.
+// adminMiddleware checks the proxy key in the supported OpenAI-compatible locations.
 func adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		adminKey := os.Getenv("ADMIN_API_KEY")
+		adminKey := getenv("ADMIN_API_KEY")
 		if adminKey == "" {
 			log.Print("ADMIN_API_KEY environment variable not set")
+			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, "Admin API not configured", http.StatusInternalServerError)
 			return
 		}
@@ -26,11 +26,10 @@ func adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		switch {
 		case authHeader != "":
-			// Expect "Bearer <token>" format, case-insensitive
-			parts := strings.Split(authHeader, " ")
+			parts := strings.Fields(authHeader)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				log.Printf("Invalid Authorization header format for admin endpoint: %s %s from %s",
-					r.Method, r.RequestURI, r.RemoteAddr)
+				log.Printf("Invalid Authorization header format: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+				w.Header().Set("Cache-Control", "no-store")
 				http.Error(w, "Invalid Authorization header format", http.StatusUnauthorized)
 				return
 			}
@@ -40,15 +39,17 @@ func adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		case keyParam != "":
 			providedToken = keyParam
 		default:
-			log.Printf("Missing required Authorization header, X-API-Key header, or key query parameter for admin endpoint: %s %s from %s",
-				r.Method, r.RequestURI, r.RemoteAddr)
+			log.Printf("Missing API key: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		if providedToken != adminKey {
-			log.Printf("Invalid admin API key provided: %s %s from %s",
-				r.Method, r.RequestURI, r.RemoteAddr)
+		providedHash := sha256.Sum256([]byte(providedToken))
+		expectedHash := sha256.Sum256([]byte(adminKey))
+		if subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) != 1 {
+			log.Printf("Invalid API key: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

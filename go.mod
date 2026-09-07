@@ -2,7 +2,10 @@ module github.com/dvcrn/grok-oauth-proxy
 
 go 1.25.5
 
-require github.com/modelcontextprotocol/go-sdk v1.7.0
+require (
+	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/syumai/workers-go v0.35.0
+)
 
 require (
 	github.com/google/jsonschema-go v0.4.3 // indirect

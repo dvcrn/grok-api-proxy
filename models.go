@@ -96,7 +96,7 @@ func fetchModels(ctx context.Context, accessToken string) (int, []byte, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := runtimeClient.Do(req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("fetch upstream models: %w", err)
 	}

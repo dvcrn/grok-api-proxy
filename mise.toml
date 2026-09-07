@@ -13,6 +13,17 @@ description = "Build the proxy binary"
 run = "go test ./..."
 description = "Run Go tests"
 
+[tasks.format]
+run = "gofmt -w *.go"
+description = "Format Go code"
+
+[tasks."build-worker"]
+run = [
+  "go run github.com/syumai/workers-go/cmd/workers-assets-gen -mode=go",
+  "GOOS=js GOARCH=wasm go build -o ./build/app.wasm .",
+]
+description = "Build for Cloudflare Workers"
+
 [tasks.publish]
 run = "cd npm/ && npm publish"
 description = "Publish the npm wrapper package in npm/"

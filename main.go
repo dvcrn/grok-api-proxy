@@ -1,3 +1,5 @@
+//go:build !js || !wasm
+
 package main
 
 import (
@@ -5,9 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -21,19 +20,9 @@ import (
 )
 
 const (
-	clientID    = "b1a00492-073a-47ea-816f-4c329264a828"
 	redirectURI = "http://127.0.0.1:56121/callback"
-	scope       = "openid profile email offline_access grok-cli:access api:access"
 	authURL     = "https://auth.x.ai/oauth2/authorize"
-	tokenURL    = "https://auth.x.ai/oauth2/token"
-	apiURL      = "https://api.x.ai/v1"
 )
-
-type AuthTokens struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"` // Unix timestamp in seconds
-}
 
 var (
 	// In-memory store for PKCE verifiers keyed by state
@@ -65,7 +54,9 @@ func getAuthFilePath() string {
 	return newPath
 }
 
-func saveTokens(tokens AuthTokens) error {
+type fileTokenStore struct{}
+
+func (fileTokenStore) SaveTokens(tokens AuthTokens) error {
 	path := getAuthFilePath()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
@@ -77,7 +68,7 @@ func saveTokens(tokens AuthTokens) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-func loadTokens() (*AuthTokens, error) {
+func (fileTokenStore) LoadTokens() (*AuthTokens, error) {
 	path := getAuthFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -90,24 +81,39 @@ func loadTokens() (*AuthTokens, error) {
 	return &tokens, nil
 }
 
-func generateRandomString(n int) string {
+func generateRandomString(n int) (string, error) {
 	b := make([]byte, n)
-	rand.Read(b)
-	return base64.RawURLEncoding.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func generatePKCE() (verifier string, challenge string) {
-	verifier = generateRandomString(32)
-	h := sha256.New()
-	h.Write([]byte(verifier))
-	challenge = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-	return
+func generatePKCE() (verifier string, challenge string, err error) {
+	verifier, err = generateRandomString(32)
+	if err != nil {
+		return "", "", err
+	}
+	h := sha256.Sum256([]byte(verifier))
+	return verifier, base64.RawURLEncoding.EncodeToString(h[:]), nil
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
-	state := generateRandomString(16)
-	nonce := generateRandomString(16)
-	verifier, challenge := generatePKCE()
+	state, err := generateRandomString(16)
+	if err != nil {
+		http.Error(w, "Failed to start OAuth login", http.StatusInternalServerError)
+		return
+	}
+	nonce, err := generateRandomString(16)
+	if err != nil {
+		http.Error(w, "Failed to start OAuth login", http.StatusInternalServerError)
+		return
+	}
+	verifier, challenge, err := generatePKCE()
+	if err != nil {
+		http.Error(w, "Failed to start OAuth login", http.StatusInternalServerError)
+		return
+	}
 
 	mu.Lock()
 	stateVerifiers[state] = verifier
@@ -156,44 +162,19 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Exchange code for tokens
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("code", code)
-	data.Set("redirect_uri", redirectURI)
-	data.Set("client_id", clientID)
-	data.Set("code_verifier", verifier)
-	data.Set("code_challenge_method", "S256") // Just in case, the TS implementation sends it though usually it's only in /authorize
-
-	resp, err := http.PostForm(tokenURL, data)
+	tokens, err := requestTokens(r.Context(), url.Values{
+		"grant_type":            {"authorization_code"},
+		"code":                  {code},
+		"redirect_uri":          {redirectURI},
+		"client_id":             {clientID},
+		"code_verifier":         {verifier},
+		"code_challenge_method": {"S256"},
+	}, "")
 	if err != nil {
-		http.Error(w, "Token exchange failed: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Token exchange failed", http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		http.Error(w, fmt.Sprintf("Token exchange failed (%d): %s", resp.StatusCode, string(body)), http.StatusInternalServerError)
-		return
-	}
-
-	var tr struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
-		http.Error(w, "Failed to parse token response", http.StatusInternalServerError)
-		return
-	}
-
-	tokens := AuthTokens{
-		AccessToken:  tr.AccessToken,
-		RefreshToken: tr.RefreshToken,
-		ExpiresAt:    time.Now().Unix() + int64(tr.ExpiresIn),
-	}
-	if err := saveTokens(tokens); err != nil {
+	if err := saveTokens(*tokens); err != nil {
 		http.Error(w, "Failed to save tokens: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -207,117 +188,6 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 			authComplete <- true
 		}()
 	}
-}
-
-func refreshToken(refreshToken string) (*AuthTokens, error) {
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("client_id", clientID)
-	data.Set("refresh_token", refreshToken)
-
-	resp, err := http.PostForm(tokenURL, data)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("refresh failed (%d): %s", resp.StatusCode, string(body))
-	}
-
-	var tr struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
-		return nil, err
-	}
-
-	// Sometimes refresh token is not returned, keep the old one
-	newRefresh := tr.RefreshToken
-	if newRefresh == "" {
-		newRefresh = refreshToken
-	}
-
-	tokens := AuthTokens{
-		AccessToken:  tr.AccessToken,
-		RefreshToken: newRefresh,
-		ExpiresAt:    time.Now().Unix() + int64(tr.ExpiresIn),
-	}
-	if err := saveTokens(tokens); err != nil {
-		return nil, err
-	}
-
-	return &tokens, nil
-}
-
-type errorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
-}
-
-func writeJSONError(w http.ResponseWriter, status int, response errorResponse) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("write json error response: %v", err)
-	}
-}
-
-var (
-	unauthorizedResponse = errorResponse{
-		Error:   "Unauthorized",
-		Message: "Please visit http://127.0.0.1:56121/login in your browser to authenticate.",
-	}
-	tokenExpiredResponse = errorResponse{
-		Error:   "Token expired",
-		Message: "Failed to refresh token. Please visit http://127.0.0.1:56121/login again.",
-	}
-)
-
-var (
-	errNotAuthenticated   = errors.New("no stored credentials")
-	errTokenRefreshFailed = errors.New("failed to refresh token")
-)
-
-// currentAccessToken loads the stored tokens and refreshes them when they are
-// about to expire. HTTP handlers should use ensureAccessToken, which turns the
-// errors into the JSON responses clients expect.
-func currentAccessToken() (*AuthTokens, error) {
-	tokens, err := loadTokens()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", errNotAuthenticated, err)
-	}
-	if tokens.AccessToken == "" {
-		return nil, errNotAuthenticated
-	}
-
-	if time.Now().Unix() > tokens.ExpiresAt-120 {
-		newTokens, err := refreshToken(tokens.RefreshToken)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", errTokenRefreshFailed, err)
-		}
-		tokens = newTokens
-	}
-
-	return tokens, nil
-}
-
-func ensureAccessToken(w http.ResponseWriter) (*AuthTokens, bool) {
-	tokens, err := currentAccessToken()
-	if errors.Is(err, errTokenRefreshFailed) {
-		log.Printf("Failed to refresh token: %v", err)
-		writeJSONError(w, http.StatusUnauthorized, tokenExpiredResponse)
-		return nil, false
-	}
-	if err != nil {
-		writeJSONError(w, http.StatusUnauthorized, unauthorizedResponse)
-		return nil, false
-	}
-
-	return tokens, true
 }
 
 func handleProxy(p *httputil.ReverseProxy) http.HandlerFunc {
@@ -335,8 +205,10 @@ func handleProxy(p *httputil.ReverseProxy) http.HandlerFunc {
 			return
 		}
 
-		// Inject Authorization header
-		r.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+		headers := make(http.Header)
+		copyRequestHeaders(headers, r.Header)
+		headers.Set("Authorization", "Bearer "+tokens.AccessToken)
+		r.Header = headers
 
 		// Serve the request via proxy
 		p.ServeHTTP(w, r)
@@ -366,6 +238,8 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func main() {
+	configureRuntime(fileTokenStore{}, http.DefaultClient)
+
 	if len(os.Args) > 1 && os.Args[1] == "auth" {
 		isAuthMode = true
 	}
@@ -378,6 +252,9 @@ func main() {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		req.Host = target.Host
+		query := req.URL.Query()
+		query.Del("key")
+		req.URL.RawQuery = query.Encode()
 
 		// Normalize paths that start with /v1 so that tools which send
 		// /v1/models or /v1/chat/completions still work correctly.
