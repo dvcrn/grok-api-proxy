@@ -85,15 +85,38 @@ The local server binds to loopback only. Requests to `/login` and `/callback` re
 
 ## Cloudflare Workers
 
-Workers deployments store OAuth credentials in KV and send xAI traffic through a [Workers VPC](https://developers.cloudflare.com/workers-vpc/) tunnel. Create a tunnel in **Cloudflare Dashboard > Workers VPC > Tunnels**, run `cloudflared` on a machine with normal Internet access, and set its UUID on the `GROK_EGRESS` binding in `wrangler.toml`.
+Workers deployments store OAuth credentials in KV and send xAI traffic through a [Workers VPC](https://developers.cloudflare.com/workers-vpc/) tunnel. Install Go 1.25.5 or newer, [mise](https://mise.jdx.dev/), and Wrangler 4, then run `mise install` and `wrangler login`. The account, namespace, and tunnel IDs checked into `wrangler.toml` belong to the maintainer deployment and must be replaced for another Cloudflare account.
 
-```bash
-wrangler kv namespace create GROK_OAUTH_PROXY_KV
-wrangler deploy
-wrangler secret put ADMIN_API_KEY
-```
+1. Create a tunnel in **Cloudflare Dashboard > Workers VPC > Tunnels** and run `cloudflared` on a machine with normal Internet access.
+2. Create a KV namespace with `wrangler kv namespace create GROK_OAUTH_PROXY_KV`.
+3. Set your account ID, the returned KV ID, and the tunnel UUID in `wrangler.toml`:
 
-Set the returned namespace ID on the `GROK_AUTH` binding. See Cloudflare's [tunnel setup](https://developers.cloudflare.com/workers-vpc/configuration/tunnel/) and [VPC Networks guide](https://developers.cloudflare.com/workers-vpc/configuration/vpc-networks/).
+   ```toml
+   account_id = "<ACCOUNT_ID>"
+   kv_namespaces = [
+     { binding = "GROK_AUTH", id = "<KV_NAMESPACE_ID>" }
+   ]
+   vpc_networks = [
+     { binding = "GROK_EGRESS", tunnel_id = "<TUNNEL_ID>", remote = true }
+   ]
+   ```
+
+4. Deploy and set the client-facing key at Wrangler's secure prompt:
+
+   ```bash
+   wrangler deploy
+   wrangler secret put ADMIN_API_KEY
+   ```
+
+5. Optional: add a [Workers Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) to `wrangler.toml`. Do not create a CNAME to `workers.dev`:
+
+   ```toml
+   routes = [
+     { pattern = "grok.example.com", custom_domain = true }
+   ]
+   ```
+
+   Run `wrangler deploy` again after adding the route. See Cloudflare's [tunnel setup](https://developers.cloudflare.com/workers-vpc/configuration/tunnel/) and [VPC Networks guide](https://developers.cloudflare.com/workers-vpc/configuration/vpc-networks/).
 
 Start xAI device authorization with the protected admin API:
 
@@ -104,7 +127,7 @@ curl -X POST "$BASE_URL/admin/auth/start" \
   -H "Authorization: Bearer $ADMIN_API_KEY"
 ```
 
-Open the returned `verificationUrl`, enter `userCode` if prompted, then poll no faster than `retryAfterSeconds`:
+Open the returned `verificationUrl` and enter `userCode` if prompted. Poll no faster than `retryAfterSeconds`, and stop on `authenticated`, `denied`, `expired`, or `failed`. The session expires automatically at the provider-supplied `expiresAt` time:
 
 ```bash
 curl -X POST "$BASE_URL/admin/auth/status" \
